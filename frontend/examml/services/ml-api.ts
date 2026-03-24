@@ -98,18 +98,23 @@ export const mlAPI = {
           const data = await res.json();
           console.log(`ML-API: [DATA] Response for "${word}":`, data);
           
-          const suggested = data.correction || data.result;
+          // D'après la capture Swagger : l'objet contient un tableau 'corrections'
+          if (data.corrections && Array.isArray(data.corrections) && data.corrections.length > 0) {
+            const firstCorrection = data.corrections[0];
+            // On gère si la correction est une string ou un objet { word: "..." }
+            const suggested = typeof firstCorrection === 'string' ? firstCorrection : (firstCorrection.word || firstCorrection.suggestion);
 
-          if (suggested && suggested.toLowerCase() !== word.toLowerCase()) {
-            console.log(`ML-API: [HIT] Error detected: "${word}" -> "${suggested}"`);
-            return {
-              id: `err_${Date.now()}_${index}`,
-              original: word,
-              suggestion: suggested,
-              context: `... ${word} ...`,
-              type: "spell" as const,
-              confidence: data.confidence || 0.9
-            };
+            if (suggested && suggested.toLowerCase() !== word.toLowerCase()) {
+              console.log(`ML-API: [HIT] Error detected: "${word}" -> "${suggested}"`);
+              return {
+                id: `err_${Date.now()}_${index}`,
+                original: word,
+                suggestion: suggested,
+                context: `... ${word} ...`,
+                type: "spell" as const,
+                confidence: data.confidence || 0.9
+              };
+            }
           }
         } catch (e) {
           console.error(`ML-API: [FATAL] Fetch error for word "${word}":`, e);

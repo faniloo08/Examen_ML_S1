@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
-import { PenLine, Settings, FileText, User } from "lucide-react";
+import { PenLine, Settings, FileText, User, Sun, Moon } from "lucide-react";
+import { useTheme } from "./ThemeProvider";
 
 export function Navbar() {
+  const { theme, setTheme } = useTheme();
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-950/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:supports-[backdrop-filter]:bg-neutral-950/60 transition-all">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
@@ -25,6 +30,13 @@ export function Navbar() {
             <span className="hidden sm:block">Paramètres</span>
           </Link>
           
+          <button 
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="p-2 text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+
           <div className="h-6 w-px bg-neutral-200 dark:bg-neutral-800 mx-2" />
 
           <button className="flex items-center gap-2 hover:bg-neutral-100 dark:hover:bg-neutral-800/50 p-1.5 pr-3 rounded-full border border-neutral-200 dark:border-neutral-800 transition-colors">
@@ -34,7 +46,6 @@ export function Navbar() {
             <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300 hidden sm:block">Koto</span>
           </button>
         </nav>
-
       </div>
     </header>
   );
