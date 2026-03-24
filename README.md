@@ -20,10 +20,10 @@
 ## 🛠 Stack Technique
 
 ### 🔙 Backend & Machine Learning
-- **Langage** : 
-- **Framework** : 
+- **Langage** : Python
+- **Framework** : FastAPI
 - **ML** : 
-- **Déploiement** : 
+- **Déploiement** : Render
 
 ### 🎨 Frontend
 - **Framework** : Next.js 15 (React 19)
@@ -49,11 +49,6 @@ npm install
 npm run dev
 ```
 
-### Backend (Développement)<h1 align="center">🎓 LevelMind</h1>
-
-<p align="center">
-  <strong>Une plateforme d'e-learning innovante pour les écoles et universités</strong>
-</p>
 ```bash
 cd backend
 # Créer un venv
@@ -68,4 +63,4 @@ uvicorn main:app --reload
 
 ---
 
-**Version finale :** **[Lien de l'application](#)**
+**Version finale :** **[Lien de l'application](https://exam-ml-s1.vercel.app/)**
