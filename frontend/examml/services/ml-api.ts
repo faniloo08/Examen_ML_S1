@@ -1,28 +1,24 @@
-// Typages pour le backend ML (Bag of Words, N-grams, API Wiki)
+/**
+ * Service de communication avec le Backend NLP Malgache (FastAPI / Render)
+ */
 
-export interface AutocompleteRequest {
-  query: string; // Le mot ou fragment tapé (n-gram context for the future)
-}
+const BASE_URL = "https://fastapi-for-malagasyeditor-2.onrender.com";
 
 export interface AutocompleteResponse {
   query: string;
   suggestions: {
     word: string;
-    score: number; // Probabilité issue du modèle ML
+    score: number;
   }[];
-}
-
-export interface SpellCheckRequest {
-  text: string; // Le texte complet ou la phrase cible
 }
 
 export interface CorrectionAnomaly {
   id: string;
-  original: string;    // Le mot erroné identifié
+  original: string;    // Le mot erroné
   suggestion: string;  // La proposition du modèle ML
-  context: string;     // La phrase avec le contexte pour l'affichage
-  type: "spell" | "grammar" | "ngram_anomaly"; 
-  confidence: number;  // Confiance du modèle (0-1)
+  context: string;     // La phrase avec le contexte
+  type: "spell" | "grammar"; 
+  confidence: number;
 }
 
 export interface SpellCheckResponse {
@@ -30,78 +26,107 @@ export interface SpellCheckResponse {
   corrections: CorrectionAnomaly[];
 }
 
-/**
- * Service Mock pour simuler la communication avec l'API Backend ML
- * Ces fonctions pourront facilement être remplacées par de vrais appels fetch() plus tard.
- */
 export const mlAPI = {
   
-  // 1. Service d'autocomplétion (pour >= 2 lettres)
-  async getAutocomplete(query: string): Promise<AutocompleteResponse> {
-    // Simuler le délai réseau de l'API ML
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    
-    const q = query.toLowerCase();
-    let mockSuggestions: { word: string; score: number }[] = [];
+  /**
+   * 1. Service d'autocomplétion
+   * Appelle l'endpoint /suggest avec le fragment actuel et le mot précédent
+   */
+  async getAutocomplete(query: string, previous: string = ""): Promise<AutocompleteResponse> {
+    try {
+      const response = await fetch(`${BASE_URL}/suggest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, previous })
+      });
 
-    // Exemples mockés typiques (données d'apprentissage hypothétiques)
-    if (q.startsWith("ma")) {
-      mockSuggestions = [
-        { word: "manao", score: 0.95 },
-        { word: "manana", score: 0.82 },
-        { word: "mandeha", score: 0.70 }
-      ];
-    } else if (q.startsWith("fi")) {
-      mockSuggestions = [
-        { word: "fianarana", score: 0.88 },
-        { word: "fiainana", score: 0.85 },
-      ];
-    } else if (q.startsWith("ts")) {
-      mockSuggestions = [
-        { word: "tsara", score: 0.99 },
-        { word: "tsy", score: 0.95 },
-      ];
+      if (!response.ok) throw new Error("Erreur Backend Suggest");
+      
+      const data = await response.json();
+      
+      // Adaptation du format de réponse de l'API vers notre interface Frontend
+      // Si l'API renvoie directement une liste de mots
+      if (Array.isArray(data.suggestions)) {
+        return {
+          query,
+          suggestions: data.suggestions.map((s: any) => ({
+            word: typeof s === 'string' ? s : s.word,
+            score: s.score || 1.0
+          }))
+        };
+      }
+
+      // Fallback si l'API renvoie un objet différent
+      return {
+        query,
+        suggestions: data.result ? [{ word: data.result, score: 1.0 }] : []
+      };
+    } catch (e) {
+      console.error("Autocomplete API Error:", e);
+      return { query, suggestions: [] };
     }
-
-    return {
-      query,
-      suggestions: mockSuggestions,
-    };
   },
 
-  // 2. Service de correction (Bag of Words / N-Grams)
+  /**
+   * 2. Service de correction
+   * Analyse le texte et identifie les erreurs via l'endpoint /correct (mot par mot pour le MVP)
+   */
   async checkText(text: string): Promise<SpellCheckResponse> {
-    await new Promise((resolve) => setTimeout(resolve, 800)); // Plus long, analyse complète
-    
     const anomalies: CorrectionAnomaly[] = [];
     const words = text.split(/[\s,.;!?]+/);
+    
+    // Pour le MVP, on vérifie les mots de 2 lettres ou plus
+    const targetWords = words.filter(w => w.length >= 2).slice(0, 40);
 
-    // Mock arbitraire de détection de fautes courantes
-    const mockErrors: Record<string, string> = {
-      "akory": "Manao ahoana", // Suggestion n-gram contextuelle
-      "tsr": "tsara",
-      "hndry": "hiandry",
-      "fianran": "fianarana"
-    };
+    try {
+      console.log(`ML-API: Checking ${targetWords.length} words for corrections...`);
+      
+      const promises = targetWords.map(async (word, index) => {
+        try {
+          console.log(`ML-API: [DEBUG] Requesting /correct for word: "${word}"`);
+          const res = await fetch(`${BASE_URL}/correct`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ word })
+          });
+          
+          if (!res.ok) {
+            console.error(`ML-API: [ERROR] /correct failed for "${word}" - Status: ${res.status}`);
+            return null;
+          }
 
-    words.forEach((w, index) => {
-      const wLower = w.toLowerCase();
-      if (mockErrors[wLower]) {
-        // Obtenir un bout de contexte autour du mot
-        const startCtx = Math.max(0, index - 2);
-        const endCtx = Math.min(words.length, index + 3);
-        const contextStr = words.slice(startCtx, endCtx).join(" ").replace(w, `[${w}]`);
+          const data = await res.json();
+          console.log(`ML-API: [DATA] Response for "${word}":`, data);
+          
+          const suggested = data.correction || data.result;
 
-        anomalies.push({
-          id: `err_${Date.now()}_${index}`,
-          original: w,
-          suggestion: mockErrors[wLower],
-          context: contextStr,
-          type: "spell",
-          confidence: 0.89
-        });
-      }
-    });
+          if (suggested && suggested.toLowerCase() !== word.toLowerCase()) {
+            console.log(`ML-API: [HIT] Error detected: "${word}" -> "${suggested}"`);
+            return {
+              id: `err_${Date.now()}_${index}`,
+              original: word,
+              suggestion: suggested,
+              context: `... ${word} ...`,
+              type: "spell" as const,
+              confidence: data.confidence || 0.9
+            };
+          }
+        } catch (e) {
+          console.error(`ML-API: [FATAL] Fetch error for word "${word}":`, e);
+          return null;
+        }
+        return null;
+      });
+
+      const results = await Promise.all(promises);
+      results.forEach(res => {
+        if (res) anomalies.push(res);
+      });
+
+      console.log(`ML-API: Found ${anomalies.length} potential corrections.`);
+    } catch (e) {
+      console.error("Correction API Global Error:", e);
+    }
 
     return {
       text,

@@ -44,13 +44,18 @@ export function TipTapEditor({ editor }: TipTapEditorProps) {
       }
 
       const $pos = state.selection.$anchor;
-      const textBefore = $pos.parent.textBetween(Math.max(0, $pos.parentOffset - 20), $pos.parentOffset, null, '\n');
-      const match = textBefore.match(/([a-zA-Z]+)$/);
+      const textBefore = $pos.parent.textBetween(Math.max(0, $pos.parentOffset - 40), $pos.parentOffset, null, '\n');
       
-      if (match && match[1].length >= 2) {
-        const word = match[1];
+      // On cherche les deux derniers mots
+      const matches = textBefore.match(/([a-zA-Zà-üéèêîôû'’\-]+)\s+([a-zA-Zà-üéèêîôû'’\-]+)$/);
+      const matchSingle = textBefore.match(/([a-zA-Zà-üéèêîôû'’\-]+)$/);
+      
+      if (matchSingle && matchSingle[1].length >= 2) {
+        const word = matchSingle[1];
+        const previousWord = matches ? matches[1] : ""; // Mot précédent pour le n-gram context
+        
         try {
-          const res = await mlAPI.getAutocomplete(word);
+          const res = await mlAPI.getAutocomplete(word, previousWord);
           if (res.suggestions.length > 0) {
             const best = res.suggestions[0].word;
             if (best.toLowerCase().startsWith(word.toLowerCase()) && best.length > word.length) {
