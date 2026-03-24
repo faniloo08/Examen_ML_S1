@@ -30,15 +30,6 @@
 - **Styling** : Tailwind CSS
 - **Déploiement** : Vercel (recommandé)
 
----
-
-## 📊 Données & Modèle (Backend FR)
-- **Dataset** : 
-- **Prétraitement** : 
-- **Modèle** : 
-- **Métriques** : 
-
----
 
 ## ▶️ Lancer le projet en local
 
@@ -61,6 +52,10 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
----
+## Futures améliorations
+
+- Lémmatisation
+- Analyse de sentiments
+- Synthèse vocale (TTS)
 
 **Version finale :** **[Lien de l'application](https://exam-ml-s1.vercel.app/)**
