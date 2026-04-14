@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, use, useEffect } from "react";
+import { useState, use, useEffect, useRef } from "react";
 import { useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
-import { Save, Download, PanelRight, ChevronLeft } from "lucide-react";
+import { Save, Download, PanelRight, ChevronLeft, Volume2, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
@@ -17,6 +17,8 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [docTitle, setDocTitle] = useState(id === "new" ? "Nouveau document" : "Chargement...");
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -70,8 +72,42 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     toast.success("Exportation PDF lancée !");
   };
 
+  const handleTTS = () => {
+    if (!editor || isPlaying) return;
+    const text = editor.getText();
+    if (!text.trim()) {
+        toast.warning("Le document est vide.");
+        return;
+    }
+    
+    setIsPlaying(true);
+    toast.info("Génération de l'audio en cours...");
+    
+    try {
+        const url = `/api/tts?text=${encodeURIComponent(text.substring(0, 200))}`;
+        if (audioRef.current) {
+            audioRef.current.src = url;
+            audioRef.current.volume = 1.0;
+            audioRef.current.play().catch(e => {
+                console.error("Audio block:", e);
+                setIsPlaying(false);
+                toast.error("Lecture audio bloquée par le navigateur.");
+            });
+            audioRef.current.onended = () => setIsPlaying(false);
+            audioRef.current.onerror = () => {
+                setIsPlaying(false);
+                toast.error("Format audio non supporté.");
+            };
+        }
+    } catch(e) {
+        toast.error("Erreur avec la lecture audio.");
+        setIsPlaying(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
+      <audio ref={audioRef} className="hidden" />
       {/* Editor Top Bar */}
       <div className="h-14 border-b border-neutral-800 bg-neutral-950/80 flex items-center justify-between px-4 z-10 shrink-0">
         <div className="flex items-center gap-4">
@@ -96,6 +132,15 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
               IA Globale
             </button>
           )}
+
+          <button 
+            onClick={handleTTS}
+            disabled={isPlaying}
+            className="flex items-center gap-2 border border-neutral-700 hover:bg-neutral-800 text-neutral-200 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
+          >
+            {isPlaying ? <Loader2 className="animate-spin" size={16} /> : <Volume2 size={16} />}
+            <span className="hidden md:inline">{isPlaying ? "Lecture..." : "Écouter"}</span>
+          </button>
 
           <button 
             onClick={handleExport}

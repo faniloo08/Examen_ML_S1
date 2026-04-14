@@ -1,0 +1,30 @@
+Tu es un expert en linguistique malagasy.
+
+Analyse le mot suivant et identifie :
+- sa racine
+- son préfixe
+- son suffixe
+
+Préfixes possibles :
+mi-, ma-, man-, mam-, maha-, mpan-, mpam-, fi-, fan-, fam-
+
+Suffixes possibles :
+-ana, -ina, -na
+
+Règles importantes :
+- Le malagasy utilise des transformations morphologiques
+- La racine doit être la forme la plus simple du mot
+
+⚠️ Contraintes :
+- Ne pas inventer
+- Si incertain → "inconnu"
+- Réponse STRICTEMENT structurée
+
+FORMAT :
+
+Racine: ...
+Préfixe: ...
+Suffixe: ...
+
+Mot :
+{mot}

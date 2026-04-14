@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { Sparkles, Languages, CheckCircle, MessageSquare, GraduationCap, X } from "lucide-react";
 import { AIWidgetCard } from "./AIWidgetCard";
-import { MOCK_GRAMMAR_RULES } from "@/lib/mock-data";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { mlAPI, type CorrectionAnomaly } from "@/services/ml-api";
+import { checkLinguisticRules, type LinguisticRuleError } from "@/services/rules";
+import { analyzeSentiment, type SentimentResult } from "@/services/sentiment";
 import { type Editor } from "@tiptap/react";
+import { HeartPulse } from "lucide-react";
 
 interface AISidebarProps {
   isOpen: boolean;
@@ -22,6 +24,18 @@ export function AISidebar({ isOpen, onClose, editor }: AISidebarProps) {
   const [chatHistory, setChatHistory] = useState([
     { role: "assistant", content: "Manao ahoana ! Azoko hanampiana anao ve ?" }
   ]);
+
+  // Lemmatization States
+  const [lemmaWord, setLemmaWord] = useState("");
+  const [isLemmatizing, setIsLemmatizing] = useState(false);
+  const [lemmaResult, setLemmaResult] = useState<{root: string, prefix: string, suffix: string, source: string} | null>(null);
+
+  // Rule States
+  const [ruleErrors, setRuleErrors] = useState<LinguisticRuleError[]>([]);
+  const [isCheckingRules, setIsCheckingRules] = useState(false);
+
+  // Sentiment State
+  const [sentiment, setSentiment] = useState<{result: SentimentResult, score: number} | null>(null);
 
   const handleAnalysis = async () => {
     if (!editor) return toast.error("Éditeur non initialisé");
@@ -65,19 +79,80 @@ export function AISidebar({ isOpen, onClose, editor }: AISidebarProps) {
     }
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatMessage.trim()) return;
-
-    setChatHistory([...chatHistory, { role: "user", content: chatMessage }]);
-    setChatMessage("");
+  const handleRuleCheck = () => {
+    if (!editor) return;
+    setIsCheckingRules(true);
+    const text = editor.getText();
+    const errors = checkLinguisticRules(text);
+    setRuleErrors(errors);
+    setIsCheckingRules(false);
     
-    setTimeout(() => {
-       setChatHistory(prev => [...prev, { 
-         role: "assistant", 
-         content: "Tsara izany ! Tokony hasiana teny manentana kely ve eto amin'ny fehezanteny farany ?" 
-       }]);
-    }, 1500);
+    if (errors.length > 0) {
+      toast.warning(`${errors.length} erreur(s) linguistique(s) listée(s)`);
+    } else {
+      toast.success("Aucune faute de lettre ou syllabe !");
+    }
+  };
+
+  const handleSentimentCheck = () => {
+    if (!editor) return;
+    const text = editor.getText();
+    const result = analyzeSentiment(text);
+    setSentiment({ result: result.sentiment, score: result.score });
+    toast.success("Analyse de sentiment terminée");
+  };
+
+  const handleLemmatize = async () => {
+    if (!lemmaWord.trim()) return;
+    setIsLemmatizing(true);
+    try {
+      const res = await fetch("/api/lemmatize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ word: lemmaWord })
+      });
+      if (!res.ok) throw new Error("Erreur serveur");
+      const data = await res.json();
+      setLemmaResult(data);
+      if (data.source === 'llm') {
+        toast.info("Lemmatisation générée par l'IA");
+      }
+    } catch (e) {
+      toast.error("Erreur de lemmatisation");
+    } finally {
+      setIsLemmatizing(false);
+    }
+  };
+
+  const [isChatting, setIsChatting] = useState(false);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatMessage.trim() || isChatting) return;
+
+    const newMessage = { role: "user", content: chatMessage.trim() };
+    const updatedHistory = [...chatHistory, newMessage];
+    
+    setChatHistory(updatedHistory);
+    setChatMessage("");
+    setIsChatting(true);
+    
+    try {
+      const res = await fetch("/api/chat", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({ messages: updatedHistory })
+      });
+      
+      if (!res.ok) throw new Error("Erreur chat");
+      
+      const data = await res.json();
+      setChatHistory(prev => [...prev, { role: "assistant", content: data.content }]);
+    } catch (e) {
+       toast.error("Le chatbot est indisponible pour le moment.");
+    } finally {
+       setIsChatting(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -145,34 +220,110 @@ export function AISidebar({ isOpen, onClose, editor }: AISidebarProps) {
         </AIWidgetCard>
 
         {/* Grammar / Linguistic Rules Widget */}
-        <AIWidgetCard title="Règles Linguistiques" icon={<GraduationCap size={18} />} defaultOpen={false}>
-          <div className="space-y-3">
-            {MOCK_GRAMMAR_RULES.map((rule, idx) => (
-              <div key={idx} className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
-                <span className="text-xs font-semibold text-orange-400 uppercase tracking-wider block mb-1">
-                  Alert
-                </span>
-                <p className="text-sm font-medium text-white mb-1">{rule.issue}</p>
-                <p className="text-xs text-neutral-400">{rule.description}</p>
-              </div>
-            ))}
-          </div>
+        <AIWidgetCard 
+          title="Règles Linguistiques" 
+          icon={<GraduationCap size={18} />} 
+          defaultOpen={false}
+          actionButton={
+             <button 
+               onClick={handleRuleCheck}
+               className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded shadow-sm disabled:opacity-50 transition-colors"
+             >
+               Vérifier
+             </button>
+          }
+        >
+          {ruleErrors.length === 0 ? (
+             <div className="text-sm text-neutral-500 italic text-center py-2">
+               Cliquez sur Vérifier pour chercher les lettres et associations invalides.
+             </div>
+          ) : (
+            <div className="space-y-3">
+              {ruleErrors.map((rule) => (
+                <div key={rule.id} className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="text-xs font-semibold text-orange-400 uppercase tracking-wider block mb-1">
+                      {rule.issue}
+                    </span>
+                    <span className="bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded text-xs">
+                      {rule.word}
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-300">{rule.description}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </AIWidgetCard>
+
+        {/* Sentiment Analysis Widget */}
+        <AIWidgetCard 
+          title="Analyse de Sentiment" 
+          icon={<HeartPulse size={18} />} 
+          defaultOpen={false}
+          actionButton={
+             <button 
+               onClick={handleSentimentCheck}
+               className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded shadow-sm transition-colors"
+             >
+               Analyser
+             </button>
+          }
+        >
+          {!sentiment ? (
+             <div className="text-sm text-neutral-500 italic text-center py-2">
+               Appuyez sur Analyser pour évaluer le ton global de votre document.
+             </div>
+          ) : (
+             <div className="flex flex-col items-center gap-3 p-2 animate-in zoom-in-95 duration-200">
+               <div className={cn(
+                  "px-4 py-2 rounded-full font-bold text-lg border",
+                  sentiment.result === 'Positif' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+                  sentiment.result === 'Négatif' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                  'bg-neutral-800 text-neutral-300 border-neutral-700'
+               )}>
+                 {sentiment.result}
+               </div>
+               <div className="text-xs text-neutral-500">
+                 Score de polarité : {sentiment.score}
+               </div>
+             </div>
+          )}
         </AIWidgetCard>
 
         {/* Lemmatization Widget */}
         <AIWidgetCard title="Lemmatisation" icon={<Languages size={18} />} defaultOpen={false}>
            <div className="flex gap-2 mb-3">
-             <input type="text" placeholder="Entrez un mot..." className="flex-1 bg-neutral-950 border border-neutral-800 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-500" defaultValue="fanomezan-tsoa" />
-             <button className="bg-neutral-800 hover:bg-neutral-700 px-3 rounded text-sm font-medium transition-colors">Chercher</button>
+             <input 
+               type="text" 
+               placeholder="Entrez un mot..." 
+               className="flex-1 bg-neutral-950 border border-neutral-800 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-blue-500" 
+               value={lemmaWord}
+               onChange={(e) => setLemmaWord(e.target.value)}
+               onKeyDown={(e) => e.key === 'Enter' && handleLemmatize()}
+             />
+             <button 
+               onClick={handleLemmatize}
+               disabled={isLemmatizing}
+               className="bg-neutral-800 hover:bg-neutral-700 px-3 rounded text-sm font-medium transition-colors disabled:opacity-50"
+             >
+               {isLemmatizing ? "..." : "Chercher"}
+             </button>
            </div>
-           <div className="bg-neutral-950 border border-neutral-800 rounded p-3">
-              <p className="text-xs text-neutral-500 mb-1">Racine identifiée :</p>
-              <p className="font-mono text-blue-400 font-medium tracking-wide">ome</p>
-              <div className="mt-2 text-xs text-neutral-400 bg-neutral-900 p-2 rounded">
-                 Préfixe: <span className="text-emerald-400">fan-</span> <br/>
-                 Suffixe: <span className="text-emerald-400">-zana</span>
-              </div>
-           </div>
+           
+           {lemmaResult && (
+             <div className="bg-neutral-950 border border-neutral-800 rounded p-3 animate-in fade-in duration-200">
+                <p className="text-xs text-neutral-500 mb-1 flex justify-between">
+                   Racine identifiée :
+                   {lemmaResult.source === 'llm' && <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1 py-0.5 rounded">IA</span>}
+                </p>
+                <p className="font-mono text-blue-400 font-medium tracking-wide">{lemmaResult.root || '-'}</p>
+                <div className="mt-2 text-xs text-neutral-400 bg-neutral-900 p-2 rounded flex flex-col gap-1">
+                   <div>Préfixe: <span className="text-emerald-400">{lemmaResult.prefix || 'aucun'}</span></div>
+                   <div>Suffixe: <span className="text-emerald-400">{lemmaResult.suffix || 'aucun'}</span></div>
+                </div>
+             </div>
+           )}
         </AIWidgetCard>
         
         {/* Chatbot Widget */}
