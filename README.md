@@ -65,4 +65,4 @@ uvicorn main:app --reload
 
 **Version finale :** **[Lien de l'application](https://exam-ml-s1.vercel.app/)**
 
-**Démo vidéo :** **[Voir la démo](https://exam-ml-s1.vercel.app/](https://drive.google.com/file/d/14bDrd1Ztmd-_mmP6pEXdedTrtOrbMD8w/view?usp=sharing))**
+**Démo vidéo :** **[Voir la démo](https://drive.google.com/file/d/14bDrd1Ztmd-_mmP6pEXdedTrtOrbMD8w/view?usp=sharing)**
